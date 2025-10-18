@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+﻿# Calendar Multitenant - Final Submission
 
-## Getting Started
+## Overview
+Multi-tenant calendar app using Next.js + Supabase. Admin UI can import global events into an org.
 
-First, run the development server:
+## Setup
 
-```bash
+1. Clone & install:
+   git clone <your-repo-url>
+   cd calendar-multitenant
+   npm install
+
+2. Configure environment:
+   copy .env.example .env.local
+   Edit .env.local and fill your Supabase values:
+   - NEXT_PUBLIC_SUPABASE_URL
+   - NEXT_PUBLIC_SUPABASE_ANON_KEY
+   - SUPABASE_URL
+   - SUPABASE_SERVICE_ROLE_KEY
+
+## Run locally
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Open: http://localhost:3000
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## API examples
+- Get global/world events:
+  GET /api/events?select=*&source=in.(global,world)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Get org events:
+  GET /api/events?select=*&organization_id=eq.<org_uuid>
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Import into org (example slug "acme"):
+  POST /api/org/acme/import
+  JSON body: { "name":"...", "title":"...", "event_date":"YYYY-MM-DD", "description":"..." }
 
-## Learn More
+## Notes
+- Do not commit real keys into the repo.
+- For deployment (Vercel), add the same env vars in the project settings.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

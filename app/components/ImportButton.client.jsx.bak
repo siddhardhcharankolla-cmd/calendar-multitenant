@@ -1,0 +1,122 @@
+﻿// app/components/ImportButton.client.jsx
+"use client";
+
+import React, { useState } from "react";
+
+/**
+ * Robust ImportButton
+ * Props:
+ *  - slug: string (org slug)
+ *  - event: object (global event row)
+ *  - onImported?: function(insertedRow) called when import succeeded
+ */
+export default function ImportButton({ slug, event, onImported }) {
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [importedId, setImportedId] = useState(null);
+
+  async function doPost(bodyPayload) {
+    const url = `/api/org/${encodeURIComponent(slug)}/import`;
+    const jsonString = JSON.stringify(bodyPayload);
+
+    console.log("[ImportButton] POST ->", url, jsonString);
+
+    // First try: regular JSON string body
+    let res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: jsonString,
+      cache: "no-store",
+    });
+
+    // If server returned 400 (we've seen empty body issues), retry using Blob body
+    if (res.status === 400) {
+      console.warn("[ImportButton] server returned 400 - retrying with Blob body");
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: new Blob([jsonString], { type: "application/json" }),
+        cache: "no-store",
+      });
+    }
+
+    const raw = await res.text();
+    let parsed = null;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      console.warn("[ImportButton] failed to parse response JSON:", err.message, "raw:", raw);
+    }
+
+    return { res, raw, parsed };
+  }
+
+  async function handleImport(e) {
+    e.preventDefault();
+    setMsg(null);
+    setLoading(true);
+
+    const payload = {
+      name: event?.name ?? event?.title ?? null,
+      title: event?.title ?? event?.name ?? null,
+      description: event?.description ?? null,
+      event_date: event?.event_date ?? null,
+      country: event?.country ?? "Global",
+      source: "org",
+    };
+
+    try {
+      const { res, parsed } = await doPost(payload);
+
+      if (!res.ok) {
+        const serverErr = (parsed && parsed.error) || res.statusText || `HTTP ${res.status}`;
+        setMsg({ type: "error", text: `Import failed: ${serverErr}` });
+        console.error("[ImportButton] import failed:", res.status, parsed, "raw:", parsed ? null : "<raw logged above>");
+      } else {
+        setMsg({ type: "success", text: "Imported successfully" });
+        // store returned id (if present)
+        const inserted = parsed?.data ?? parsed;
+        if (inserted && inserted.id) setImportedId(inserted.id);
+        // call optional callback
+        if (typeof onImported === "function") {
+          try { onImported(inserted); } catch (_) { /* ignore */ }
+        }
+      }
+    } catch (err) {
+      console.error("[ImportButton] fetch exception:", err);
+      setMsg({ type: "error", text: `Import error: ${err.message}` });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // If already imported (we have an importedId) show a different label
+  const label = importedId ? "Imported ✓" : loading ? "Importing…" : "Import into org";
+
+  return (
+    <div style={{ display: "inline-block", textAlign: "right" }}>
+      <button
+        type="button"
+        onClick={handleImport}
+        disabled={loading || !!importedId}
+        style={{
+          padding: "8px 12px",
+          borderRadius: 8,
+          border: "1px solid #333",
+          background: importedId ? "#f0fff0" : "#fff",
+          cursor: loading || importedId ? "default" : "pointer",
+          minWidth: 120,
+        }}
+        title={importedId ? `Imported id: ${importedId}` : "Import this global event into this organization"}
+      >
+        {label}
+      </button>
+
+      {msg && (
+        <div style={{ marginTop: 8, fontSize: 13, color: msg.type === "success" ? "green" : "crimson" }}>
+          {msg.text}
+        </div>
+      )}
+    </div>
+  );
+}

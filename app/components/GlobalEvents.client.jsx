@@ -1,0 +1,69 @@
+﻿"use client";
+
+import React, { useState } from "react";
+import ImportButton from "./ImportButton.client.jsx";
+
+/**
+ * Client wrapper for global events list.
+ * Props:
+ *  - initialEvents: array (server-provided)
+ *  - slug: string (org slug)
+ */
+export default function GlobalEvents({ initialEvents = [], slug }) {
+  const [events, setEvents] = useState(initialEvents || []);
+  const [busyId, setBusyId] = useState(null);
+
+  // Called by ImportButton via onImported(insertedRow)
+  function handleImported(insertedRow, originalEventId) {
+    if (insertedRow && insertedRow.id) {
+      setEvents((prev) =>
+        prev.map((ev) => (ev.id === originalEventId ? { ...ev, _importedId: insertedRow.id } : ev))
+      );
+    }
+  }
+
+  return (
+    <div>
+      <h2 style={{ marginTop: 18 }}>Global events</h2>
+      {events.length === 0 ? (
+        <div style={{ color: "#666", marginTop: 8 }}>No global events found.</div>
+      ) : (
+        <ul style={{ listStyle: "none", padding: 0 }}>
+          {events.map((ev) => (
+            <li
+              key={ev.id}
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                padding: "12px 0",
+                borderBottom: "1px solid #eee",
+              }}
+            >
+              <div style={{ maxWidth: "75%" }}>
+                <h3 style={{ margin: 0 }}>
+                  {ev.name} — <span style={{ fontWeight: "normal" }}>{ev.event_date}</span>
+                </h3>
+                {ev.description && <div style={{ marginTop: 6, color: "#444" }}>{ev.description}</div>}
+                <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>{ev.country ?? "Global"}</div>
+                {ev._importedId && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: "green" }}>Imported (id: {ev._importedId})</div>
+                )}
+              </div>
+
+              <div style={{ marginLeft: 16, display: "flex", alignItems: "center" }}>
+                <ImportButton
+                  slug={slug}
+                  event={ev}
+                  onImported={(inserted) => {
+                    handleImported(inserted, ev.id);
+                  }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

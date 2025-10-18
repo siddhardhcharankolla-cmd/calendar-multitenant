@@ -1,148 +1,121 @@
-﻿"use client";
+﻿// app/org/[slug]/admin/page.jsx
+import React from "react";
+import { redirect } from "next/navigation";
 
-import React, { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { supabase } from "../../../../lib/supabaseClient";
+// Server-side helpers (adjust paths only if your files live elsewhere)
+import { createClient } from "../../../../src/utils/supabase/client.server.js";
+import { getUserAndProfile } from "../../../../src/utils/supabase/getUserAndProfile.server.js";
 
-export default function OrgAdminPage() {
-  const { slug } = useParams();
-  const [org, setOrg] = useState(null);
-  const [globalEvents, setGlobalEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [importingId, setImportingId] = useState(null);
-  const [message, setMessage] = useState(null);
+// Client component button
+import ImportButton from "../../../components/ImportButton.client.jsx";
 
-  useEffect(() => {
-    if (!slug) return;
-    (async () => {
-      setLoading(true);
-      try {
-        const { data: orgData, error: orgErr } = await supabase
-          .from("organizations")
-          .select("*")
-          .eq("slug", slug)
-          .limit(1)
-          .single();
-        if (orgErr) throw orgErr;
-        setOrg(orgData);
+/**
+ * Org Admin page (SERVER COMPONENT)
+ * - Protects access (login required; role must be admin or org_admin)
+ * - Lists global events with an Import button beside each row
+ */
+export default async function AdminPage({ params }) {
+  // Next.js App Router: await params
+  const { slug } = await params;
 
-        // fetch global/world events (match whatever value your DB uses for global)
-        const { data: gEvents, error: gErr } = await supabase
-          .from("events")
-          .select("*")
-          .eq("source", "world")   // <--- use 'world' because your DB uses world
-          .order("event_date", { ascending: true })
-          .limit(200);
-        if (gErr) throw gErr;
-        setGlobalEvents(gEvents || []);
-      } catch (e) {
-        setMessage({ type: "error", text: e.message || JSON.stringify(e) });
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [slug]);
-
-  async function importEvent(ev) {
-    if (!org) {
-      setMessage({ type: "error", text: "Organization not loaded" });
-      return;
-    }
-
-    setImportingId(ev.id);
-    setMessage(null);
-
-    const toInsert = {
-      name: ev.name ?? ev.title ?? "Untitled",
-      title: ev.title ?? ev.name ?? null,
-      description: ev.description ?? null,
-      event_date: ev.event_date ?? null,
-      source: "org",
-      organization_id: org.id,
-      country: ev.country ?? null,
-      region: ev.region ?? null,
-      industries: ev.industries ?? null
-    };
-
-    try {
-      const { data: inserted, error: insertErr } = await supabase
-        .from("events")
-        .insert([toInsert])
-        .select()
-        .single();
-
-      if (insertErr) throw insertErr;
-
-      setMessage({
-        type: "success",
-        text: "Imported: " + (inserted?.name ?? inserted?.title ?? "event")
-      });
-
-      // optional: refresh list of global events after import (to reflect any change)
-      // (we do not remove the global row; this simply re-fetches)
-      const { data: gEvents, error: gErr } = await supabase
-        .from("events")
-        .select("*")
-        .eq("source", "world")
-        .order("event_date", { ascending: true })
-        .limit(200);
-      if (!gErr) setGlobalEvents(gEvents || []);
-    } catch (e) {
-      setMessage({ type: "error", text: e.message || JSON.stringify(e) });
-    } finally {
-      setImportingId(null);
-    }
+  // ---- Auth & role guard ---------------------------------------------------
+  const { user, profile } = await getUserAndProfile();
+  if (!user) {
+    // Not signed in → go to login
+    redirect("/login");
+  }
+  if (!["admin", "org_admin"].includes(profile?.role)) {
+    // Not allowed
+    return (
+      <main style={{ padding: 24 }}>
+        <h2>🚫 Not authorized</h2>
+        <p>Your account doesn’t have access to this page.</p>
+      </main>
+    );
   }
 
-  if (loading) return <div style={{ padding: 16 }}>Loading admin data</div>;
+  // ---- Data loading --------------------------------------------------------
+  const supabase = createClient();
 
+  // Ensure the organization exists
+  const { data: orgRow, error: orgErr } = await supabase
+    .from("organizations")
+    .select("id, slug, name")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (orgErr || !orgRow) {
+    return (
+      <main style={{ padding: 24 }}>
+        <h2>Organization not found</h2>
+        <pre style={{ whiteSpace: "pre-wrap" }}>{orgErr?.message ?? "Unknown error"}</pre>
+      </main>
+    );
+  }
+
+  // Global events: source in ('global','world')
+  const { data: globalEvents, error: globalsErr } = await supabase
+    .from("events")
+    .select("*")
+    .in("source", ["global", "world"])
+    .order("event_date", { ascending: true })
+    .limit(200);
+
+  if (globalsErr) {
+    // Show a friendly message but don’t crash the page
+    console.error("[AdminPage] error loading global events:", globalsErr);
+  }
+
+  // ---- Render --------------------------------------------------------------
   return (
-    <div style={{ padding: 16, maxWidth: 900 }}>
-      <h1>Org Admin - {org ? org.name : slug}</h1>
-
-      {message && (
-        <div style={{ margin: "8px 0", color: message.type === "error" ? "crimson" : "green" }}>
-          {message.text}
-        </div>
-      )}
-
-      <section style={{ marginTop: 12 }}>
-        <h2>Global events</h2>
-        {globalEvents.length === 0 && <div>No global events found.</div>}
-
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          {globalEvents.map((ev) => (
-            <li key={ev.id} style={{ borderBottom: "1px solid #ddd", padding: "8px 0" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <div>
-                  <strong>{ev.title ?? ev.name}</strong>
-                  <div style={{ fontSize: 13 }}>
-                    {ev.event_date ? ev.event_date : ""}
-                  </div>
-                  {ev.country && <div style={{ fontSize: 12 }}>Country: {ev.country}</div>}
-                </div>
-
-                <div>
-                  <button
-                    onClick={() => importEvent(ev)}
-                    disabled={importingId === ev.id}
-                    style={{ padding: "6px 10px" }}
-                  >
-                    {importingId === ev.id ? "Importing" : "Import into org"}
-                  </button>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
+    <main style={{ padding: 24 }}>
+      <h1 style={{ margin: 0 }}>
+        Org Admin — <span style={{ fontWeight: "normal" }}>{orgRow.name ?? slug}</span>
+      </h1>
+      <p style={{ color: "#666", marginTop: 8 }}>
+        Signed in as <strong>{user.email}</strong> ({profile?.role})
+      </p>
 
       <section style={{ marginTop: 24 }}>
-        <small>
-          Test: create a global event in the Supabase UI, then import it here. The new row should have{' '}
-          <code>source='org'</code> and <code>organization_id</code> set.
-        </small>
+        <h2 style={{ marginBottom: 12 }}>Global events</h2>
+
+        {!globalEvents?.length ? (
+          <div style={{ color: "#666" }}>No global events found.</div>
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            {globalEvents.map((ev) => (
+              <li
+                key={ev.id}
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  padding: "12px 0",
+                  borderBottom: "1px solid #eee",
+                }}
+              >
+                <div style={{ maxWidth: "75%" }}>
+                  <h3 style={{ margin: 0 }}>
+                    {ev.name ?? ev.title ?? "Untitled"} —{" "}
+                    <span style={{ fontWeight: "normal" }}>{ev.event_date ?? "No date"}</span>
+                  </h3>
+                  {ev.description && (
+                    <div style={{ marginTop: 6, color: "#444" }}>{ev.description}</div>
+                  )}
+                  <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
+                    {ev.country ?? "Global"}
+                  </div>
+                </div>
+
+                <div style={{ marginLeft: 16, display: "flex", alignItems: "center" }}>
+                  {/* Client component import button - pass slug + event */}
+                  <ImportButton slug={slug} event={ev} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
-    </div>
+    </main>
   );
 }

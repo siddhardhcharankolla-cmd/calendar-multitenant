@@ -1,137 +1,144 @@
-﻿'use client';
+﻿// app/org/[slug]/admin/page.jsx
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { supabase } from '../../../../lib/supabaseClient';
+import React, { useEffect, useState } from "react";
+import { createClient as createClientBrowser } from "src/utils/supabase/client"; // client-side helper
 
-export default function OrgAdminPage() {
-  const { slug } = useParams();
-  const [org, setOrg] = useState(null);
+export default function AdminPage({ params }) {
+  // client component receives params prop
+  // keep the slug resolution simple & safe:
+  const slug = params?.slug || params;
+
   const [globalEvents, setGlobalEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [orgEvents, setOrgEvents] = useState([]);
   const [importingId, setImportingId] = useState(null);
   const [message, setMessage] = useState(null);
 
+  const supabase = createClientBrowser();
+
   useEffect(() => {
     if (!slug) return;
-    (async () => {
-      setLoading(true);
-      try {
-        const { data: orgData, error: orgErr } = await supabase
-          .from('organizations')
-          .select('*')
-          .eq('slug', slug)
-          .limit(1)
-          .single();
-        if (orgErr) throw orgErr;
-        setOrg(orgData);
 
-        const { data: gEvents, error: gErr } = await supabase
-          .from('events')
-          .select('*')
-          .eq('source','world')
-          .limit(200);
-        if (gErr) throw gErr;
-        setGlobalEvents(gEvents || []);
-      } catch (e) {
-        setMessage({ type: 'error', text: e.message || JSON.stringify(e) });
-      } finally {
-        setLoading(false);
+    async function loadEvents() {
+      try {
+        // global events (source = 'global' or source = 'in.world' depending on schema; adjust query)
+        const { data: gdata, error: gerr } = await supabase
+          .from("events")
+          .select("*")
+          .eq("source", "global")
+          .order("created_at", { ascending: false })
+          .limit(100);
+
+        if (gerr) {
+          console.error("Error loading global events:", gerr);
+        } else {
+          setGlobalEvents(gdata || []);
+        }
+
+        // org events
+        const { data: odata, error: oerr } = await supabase
+          .from("events")
+          .select("*")
+          .eq("organization_id", slug)
+          .order("created_at", { ascending: false })
+          .limit(100);
+
+        if (oerr) {
+          console.error("Error loading org events:", oerr);
+        } else {
+          setOrgEvents(odata || []);
+        }
+      } catch (err) {
+        console.error("Unhandled error loading events:", err);
       }
-    })();
+    }
+
+    loadEvents();
   }, [slug]);
 
   async function importEvent(ev) {
-    if (!org) {
-      setMessage({ type: 'error', text: 'Organization not loaded' });
+    if (!slug) {
+      setMessage({ type: "error", text: "Missing org slug" });
       return;
     }
+
     setImportingId(ev.id);
     setMessage(null);
 
-    const toInsert = {
-      title: ev.title ?? 'Untitled',
-      description: ev.description ?? null,
-      event_date: ev.event_date,
-      ?? null,
-      source: 'org',
-      organization_id: org.id,
-      country: ev.country ?? null,
-      industry: ev.industry ?? null
-    };
-
     try {
-      const { data: inserted, error: insertErr } = await supabase
-        .from('events')
-        .insert([toInsert])
-        .select()
-        .single();
-      if (insertErr) throw insertErr;
+      // call server route that uses the service role to insert into DB
+      const res = await fetch(`/api/org/${encodeURIComponent(slug)}/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ev),
+      });
 
-      setMessage({ type: 'success', text: `Imported: ${inserted.title}` });
-    } catch (e) {
-      setMessage({ type: 'error', text: e.message || JSON.stringify(e) });
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.error("Import failed server response:", json);
+        setMessage({ type: "error", text: json?.error || "Server import failed" });
+      } else {
+        setMessage({ type: "success", text: `Imported: ${json?.data?.name || ev.name}` });
+        // Optionally append to org events list in UI:
+        setOrgEvents((prev) => (json?.data ? [json.data, ...prev] : prev));
+      }
+    } catch (err) {
+      console.error("Error calling import route:", err);
+      setMessage({ type: "error", text: "Network/server error during import" });
     } finally {
       setImportingId(null);
     }
   }
 
-  if (loading) return <div style={{ padding: 16 }}>Loading admin data...</div>;
-
   return (
-    <div style={{ padding: 16, maxWidth: 900 }}>
-      <h1>Org Admin - {org ? org.name : slug}</h1>
+    <main className="p-6">
+      <h1 className="text-3xl font-bold">Org Admin — {slug}</h1>
 
       {message && (
-        <div style={{ margin: '8px 0', color: message.type === 'error' ? 'crimson' : 'green' }}>
+        <div style={{ marginTop: 12, color: message.type === "error" ? "crimson" : "green" }}>
           {message.text}
         </div>
       )}
 
-      <section style={{ marginTop: 12 }}>
-        <h2>Global events</h2>
-        {globalEvents.length === 0 && <div>No global events found.</div>}
-
-        <ul style={{ listStyle: 'none', padding: 0 }}>
+      <section className="mt-6">
+        <h2 className="text-2xl font-semibold">Global events</h2>
+        <ul className="mt-4 space-y-4">
+          {globalEvents.length === 0 && <li>No global events found.</li>}
           {globalEvents.map((ev) => (
-            <li key={ev.id} style={{ borderBottom: '1px solid #ddd', padding: '8px 0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                <div>
-                  <strong>{ev.title ?? ev.name}</strong>
-                  <div style={{ fontSize: 13 }}>
-                    {ev.start_date}
-                    {ev.end_date ? ` - ${ev.end_date}` : ''}
-                  </div>
-                  {ev.country && <div style={{ fontSize: 12 }}>Country: {ev.country}</div>}
-                  {ev.industry && <div style={{ fontSize: 12 }}>Industry: {ev.industry}</div>}
-                </div>
-
-                <div>
-                  <button
-                    onClick={() => importEvent(ev)}
-                    disabled={importingId === ev.id}
-                    style={{ padding: '6px 10px' }}
-                  >
-                    {importingId === ev.id ? 'Importing...' : 'Import into org'}
-                  </button>
-                </div>
+            <li key={ev.id} style={{ display: "flex", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontWeight: "bold" }}>{ev.name}</div>
+                {ev.event_date && <div style={{ fontSize: 12 }}>{ev.event_date}</div>}
+                {ev.description && <div style={{ fontSize: 13 }}>{ev.description}</div>}
+              </div>
+              <div>
+                <button
+                  onClick={() => importEvent(ev)}
+                  disabled={importingId === ev.id}
+                  style={{ padding: "8px 12px", borderRadius: 4 }}
+                >
+                  {importingId === ev.id ? "Importing…" : "Import into org"}
+                </button>
               </div>
             </li>
           ))}
         </ul>
       </section>
 
-      <section style={{ marginTop: 24 }}>
-        <small>
-          Test: create a global event in the Supabase UI, then import it here. The new row should have{' '}
-          <code>source='org'</code> and <code>organization_id</code> set.
-        </small>
+      <section className="mt-10">
+        <h2 className="text-2xl font-semibold">Organization events</h2>
+        {orgEvents.length === 0 && <p>No organization events found.</p>}
+        <ul className="mt-4 space-y-4">
+          {orgEvents.map((ev) => (
+            <li key={ev.id}>
+              <div style={{ fontWeight: "bold" }}>{ev.name}</div>
+              {ev.event_date && <div style={{ fontSize: 12 }}>{ev.event_date}</div>}
+              {ev.description && <div style={{ fontSize: 13 }}>{ev.description}</div>}
+            </li>
+          ))}
+        </ul>
       </section>
-    </div>
+    </main>
   );
 }
-
-
-
-
-
