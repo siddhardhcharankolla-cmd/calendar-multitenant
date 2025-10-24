@@ -1,9 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
-import Header from "../components/Header"; // Adjust path if needed
+import Header from "../components/Header";
 import { useRouter } from "next/navigation";
 
-// Simple decode function (can be replaced with API call later)
+// Simple decode function
 function decodeToken(token) {
   try {
     if (!token) return null;
@@ -21,7 +21,7 @@ function decodeToken(token) {
 export default function AdminPage() {
   const [eventName, setEventName] = useState("");
   const [eventDate, setEventDate] = useState("");
-  const [catalog, setCatalog] = useState("National Holidays"); // Default value
+  const [catalog, setCatalog] = useState("National Holidays");
   const [country, setCountry] = useState("");
   const [industry, setIndustry] = useState("");
   const [description, setDescription] = useState("");
@@ -35,7 +35,7 @@ export default function AdminPage() {
      const token = document.cookie.split('; ').find(row => row.startsWith('session_token='))?.split('=')[1];
      const decodedUser = token ? decodeToken(token) : null;
      if (!decodedUser || decodedUser.role !== 'system_admin') {
-         // If not system admin, redirect away (middleware should also handle this)
+         // Redirect non-admins to dashboard
          router.push('/dashboard');
      } else {
          setUserRole(decodedUser.role);
@@ -55,11 +55,11 @@ export default function AdminPage() {
 
     const eventData = {
       name: eventName,
-      event_date: eventDate, // Ensure YYYY-MM-DD format from date input
+      event_date: eventDate,
       catalog,
-      country: country || null, // Send null if empty
-      industry: industry || null, // Send null if empty
-      description: description || null, // Send null if empty
+      country: country || null,
+      industry: industry || null,
+      description: description || null,
     };
 
     try {
@@ -71,7 +71,6 @@ export default function AdminPage() {
 
       if (response.ok) {
         setMessage("Global event created successfully!");
-        // Clear form
         setEventName(""); setEventDate(""); setCatalog("National Holidays");
         setCountry(""); setIndustry(""); setDescription("");
       } else {
@@ -85,15 +84,15 @@ export default function AdminPage() {
 
   // Only render form if user is system admin
   if (userRole !== 'system_admin') {
-      return <main><p>Access Denied. Redirecting...</p></main>; // Or a loading state
+      return <main><p>Access Denied. Redirecting...</p></main>; // Loading or Redirecting state
   }
 
   return (
     <main>
-      {/* Re-use Header or create a specific AdminHeader */}
       <Header />
       <hr style={{ margin: "2rem 0" }} />
       <h1>Admin Panel - Create Global Event</h1>
+      <p>Logged in as: admin@system.com (Role: {userRole})</p>
 
       <form onSubmit={handleSubmit} style={{ maxWidth: '600px', marginTop: '2rem' }}>
         {message && <p style={{ color: "green" }}>{message}</p>}
@@ -137,4 +136,4 @@ export default function AdminPage() {
       </form>
     </main>
   );
-}x
+}
