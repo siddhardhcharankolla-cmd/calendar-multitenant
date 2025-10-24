@@ -1,10 +1,8 @@
 export const dynamic = 'force-dynamic';
-
 import { NextResponse } from "next/server";
 import { query } from "../../lib/db.js";
 import { verifyToken } from "../../lib/jwt.js";
 import { cookies } from "next/headers";
-
 async function getAuthenticatedUser() {
   const cookieStore = await cookies();
   const token = cookieStore.get("session_token")?.value;

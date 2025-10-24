@@ -1,10 +1,7 @@
 export const dynamic = 'force-dynamic';
-
 import { NextResponse } from "next/server";
-import { query } from "../../../lib/db.js"; // Adjusted path
-import { verifyToken } from "../../../lib/jwt.js"; // Adjusted path
-import { cookies } from "next/headers";
-
+import { query } from "../../../lib/db.js";
+import { verifyToken } from "../../../lib/jwt.js";
 // Helper function moved inside
 async function getAuthenticatedUser() {
   const cookieStore = await cookies(); 

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
-
+// Fix: Use correct relative path to app/lib/jwt.js
+import { verifyToken } from "./app/lib/jwt.js"; 
+// ...
 const JWT_SECRET = "this-is-a-super-secret-key-for-development";
 
 function verifyToken(token) {

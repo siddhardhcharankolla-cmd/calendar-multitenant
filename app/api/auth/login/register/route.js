@@ -1,7 +1,7 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { query } from "../../../lib/db.js";
 import bcrypt from "bcryptjs";
-
 export async function POST(req) {
   try {
     const { email, password, role, organization_id = null } = await req.json();
