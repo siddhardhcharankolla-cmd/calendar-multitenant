@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
-// Fix: Use correct relative path to app/lib/jwt.js
-import { verifyToken } from "./app/lib/jwt.js"; 
-// ...
+
+// Hardcoded secret (MUST match the one in app/lib/jwt.js)
 const JWT_SECRET = "this-is-a-super-secret-key-for-development";
 
+// The function is defined here, NOT imported.
 function verifyToken(token) {
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
@@ -31,7 +31,6 @@ export async function middleware(request) {
     }
 
     // --- Login Page Logic ---
-    // If user IS logged in, redirect them away from /login
     if (sessionToken && userRole && pathname === "/login") {
         return NextResponse.redirect(new URL("/dashboard", request.url));
     }

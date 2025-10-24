@@ -1,8 +1,8 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
-import { query } from "../../../../lib/db.js";
 import bcrypt from "bcryptjs";
-import { signToken } from "../../../../lib/jwt.js";
+import { query } from "../../../lib/db.js";
+import { signToken } from "../../../lib/jwt.js";
 import { cookies } from "next/headers";
 
 export async function POST(req) {
