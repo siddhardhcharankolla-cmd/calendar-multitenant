@@ -5,7 +5,7 @@ import pg from "pg";
 const DATABASE_URL = "postgres://postgres:StrongNewPassword!234@localhost:5432/calendar_db";
 
 const pool = new pg.Pool({
-  connectionString: DATABASE_URL,
+  connectionString: process.env.DATABASE_URL,
 });
 
 export async function query(text, params) {
