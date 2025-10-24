@@ -1,14 +1,36 @@
 import pg from "pg";
 
+// This check is important for the running application
 if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL environment variable is not set");
+  console.error("FATAL: DATABASE_URL environment variable is not set.");
+  // In production, you might want the app to crash or handle this gracefully
+  // For now, we log the error. The pool creation will likely fail anyway.
 }
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  // Add SSL configuration if you deploy to a provider that requires it
-  // ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+  // --- ADD THIS SSL CONFIGURATION for Render ---
+  ssl: {
+    rejectUnauthorized: false // Required for Render's internal connections
+  }
+  // --- END SSL CONFIGURATION ---
 });
+
+// Test connection on startup (optional but helpful)
+pool.connect((err, client, release) => {
+  if (err) {
+    return console.error('Error acquiring client for initial connection test:', err.stack)
+  }
+  console.log('Database connection test successful!');
+  client.query('SELECT NOW()', (err, result) => {
+    release()
+    if (err) {
+      return console.error('Error executing initial query', err.stack)
+    }
+    // console.log('Current DB time:', result.rows[0].now)
+  })
+})
+
 
 export async function query(text, params) {
   const client = await pool.connect();
