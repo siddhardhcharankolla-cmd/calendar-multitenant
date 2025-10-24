@@ -2,23 +2,21 @@ const { Pool } = require("pg");
 const bcrypt = require("bcryptjs");
 const { v4: uuidv4 } = require("uuid"); 
 
-// --- FIX: Import dotenv and remove hardcoded URL ---
-require("dotenv").config({ path: ".env.local" }); 
-const DATABASE_URL = process.env.DATABASE_URL; // Read from environment
-// --- END FIX ---
+// Read environment variables (will use Render's set variables)
+const DATABASE_URL = process.env.DATABASE_URL; 
 
 if (!DATABASE_URL) {
     console.error("FATAL: DATABASE_URL is not set. Cannot run seed script.");
-    process.exit(1);
+    // Throwing error here will cause build failure if DB is unreachable
+    process.exit(1); 
 }
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  // Add SSL settings for Render
   ssl: { rejectUnauthorized: false }, 
 });
 
-// These are the new credentials we will create
+// These are the credentials created for testing
 const NEW_ORG_EMAIL = "admin@acme.com";
 const NEW_USER_EMAIL = "user@acme.com";
 const NEW_SYSTEM_ADMIN_EMAIL = "admin@system.com";
@@ -31,9 +29,8 @@ async function main() {
     const hashedPassword = await bcrypt.hash(NEW_PASSWORD, 10);
     const ORG_ID = uuidv4();
     
-    // Ensure all users/data are created correctly
-
     // 1. Create Organization
+    console.log("Creating organization ACME Corp...");
     await client.query(
       `INSERT INTO Organizations (id, name, slug) 
        VALUES ($1, 'ACME Corp', 'acme-corp') ON CONFLICT (id) DO NOTHING`,
@@ -49,7 +46,6 @@ async function main() {
     // 3. Create Global Events
     const newYear = await client.query(`INSERT INTO GlobalEvents (name, event_date, catalog, country) VALUES ('New Year''s Day', '2025-01-01', 'National Holidays', 'USA') ON CONFLICT (name, event_date) DO NOTHING RETURNING id`);
     const newYearId = newYear.rows[0]?.id || (await client.query("SELECT id FROM GlobalEvents WHERE name = 'New Year''s Day'")).rows[0].id;
-    console.log("--> Global events created.");
 
     // 4. Create Org-Specific Event in 'events' table
     await client.query(
@@ -63,8 +59,8 @@ async function main() {
 
     console.log("\nDatabase seeding complete! ✅");
   } catch (error) {
-    console.error("Error during seeding:", error);
-    throw error;
+    console.error("FATAL ERROR DURING SEEDING:", error);
+    throw error; 
   } finally {
     await client.release();
     await pool.end();
