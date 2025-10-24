@@ -35,7 +35,6 @@ export default function AdminPage() {
      const token = document.cookie.split('; ').find(row => row.startsWith('session_token='))?.split('=')[1];
      const decodedUser = token ? decodeToken(token) : null;
      if (!decodedUser || decodedUser.role !== 'system_admin') {
-         // Redirect non-admins to dashboard
          router.push('/dashboard');
      } else {
          setUserRole(decodedUser.role);
@@ -62,8 +61,14 @@ export default function AdminPage() {
       description: description || null,
     };
 
+    // --- USE ENVIRONMENT VARIABLE FOR API URL ---
+    const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || ''; // Fallback for local
+    const targetUrl = `${apiUrl}/api/admin/global-events`;
+    console.log("Sending create event request to:", targetUrl); // Debug log
+    // --- END ---
+
     try {
-      const response = await fetch("/api/admin/global-events", {
+      const response = await fetch(targetUrl, { // Use the targetUrl
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(eventData),
@@ -84,7 +89,7 @@ export default function AdminPage() {
 
   // Only render form if user is system admin
   if (userRole !== 'system_admin') {
-      return <main><p>Access Denied. Redirecting...</p></main>; // Loading or Redirecting state
+      return <main><p>Access Denied. Redirecting...</p></main>;
   }
 
   return (
@@ -92,45 +97,42 @@ export default function AdminPage() {
       <Header />
       <hr style={{ margin: "2rem 0" }} />
       <h1>Admin Panel - Create Global Event</h1>
-      <p>Logged in as: admin@system.com (Role: {userRole})</p>
+      <p>Logged in as: admin@system.com (Role: {userRole})</p> {/* Example Email */}
 
       <form onSubmit={handleSubmit} style={{ maxWidth: '600px', marginTop: '2rem' }}>
         {message && <p style={{ color: "green" }}>{message}</p>}
         {error && <p style={{ color: "red" }}>{error}</p>}
 
+        {/* --- Form Inputs (Keep as is) --- */}
         <div style={{ marginBottom: '1rem' }}>
-          <label htmlFor="eventName">Event Name*:</label><br />
-          <input type="text" id="eventName" value={eventName} onChange={(e) => setEventName(e.target.value)} required style={{width: '100%'}}/>
+           <label htmlFor="eventName">Event Name*:</label><br />
+           <input type="text" id="eventName" value={eventName} onChange={(e) => setEventName(e.target.value)} required style={{width: '100%'}}/>
         </div>
-
         <div style={{ marginBottom: '1rem' }}>
-          <label htmlFor="eventDate">Date*:</label><br />
-          <input type="date" id="eventDate" value={eventDate} onChange={(e) => setEventDate(e.target.value)} required style={{width: '100%'}}/>
+           <label htmlFor="eventDate">Date*:</label><br />
+           <input type="date" id="eventDate" value={eventDate} onChange={(e) => setEventDate(e.target.value)} required style={{width: '100%'}}/>
         </div>
-
         <div style={{ marginBottom: '1rem' }}>
-          <label htmlFor="catalog">Catalog*:</label><br />
-          <select id="catalog" value={catalog} onChange={(e) => setCatalog(e.target.value)} required style={{width: '100%'}}>
-            <option value="National Holidays">National Holidays</option>
-            <option value="Regional Holidays">Regional Holidays</option>
-            <option value="World Special Days">World Special Days</option>
-          </select>
+           <label htmlFor="catalog">Catalog*:</label><br />
+           <select id="catalog" value={catalog} onChange={(e) => setCatalog(e.target.value)} required style={{width: '100%'}}>
+             <option value="National Holidays">National Holidays</option>
+             <option value="Regional Holidays">Regional Holidays</option>
+             <option value="World Special Days">World Special Days</option>
+           </select>
         </div>
-
         <div style={{ marginBottom: '1rem' }}>
-          <label htmlFor="country">Country (Optional):</label><br />
-          <input type="text" id="country" value={country} onChange={(e) => setCountry(e.target.value)} style={{width: '100%'}}/>
+           <label htmlFor="country">Country (Optional):</label><br />
+           <input type="text" id="country" value={country} onChange={(e) => setCountry(e.target.value)} style={{width: '100%'}}/>
         </div>
-
         <div style={{ marginBottom: '1rem' }}>
-          <label htmlFor="industry">Industry (Optional):</label><br />
-          <input type="text" id="industry" value={industry} onChange={(e) => setIndustry(e.target.value)} style={{width: '100%'}}/>
+           <label htmlFor="industry">Industry (Optional):</label><br />
+           <input type="text" id="industry" value={industry} onChange={(e) => setIndustry(e.target.value)} style={{width: '100%'}}/>
         </div>
-
         <div style={{ marginBottom: '1rem' }}>
-          <label htmlFor="description">Description (Optional):</label><br />
-          <textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} rows="3" style={{width: '100%'}}/>
+           <label htmlFor="description">Description (Optional):</label><br />
+           <textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} rows="3" style={{width: '100%'}}/>
         </div>
+        {/* --- End Form Inputs --- */}
 
         <button type="submit">Create Event</button>
       </form>
