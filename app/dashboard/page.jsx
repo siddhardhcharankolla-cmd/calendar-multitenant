@@ -21,8 +21,8 @@ function decodeToken(token) {
 }
 
 export default function DashboardPage() {
-  const [myEvents, setMyEvents] = useState([]);
-  const [globalEvents, setGlobalEvents] = useState([]);
+  const [myEvents, setMyEvents] = useState([]); // Default to empty array
+  const [globalEvents, setGlobalEvents] = useState([]); // Default to empty array
   const [subscriptions, setSubscriptions] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -41,7 +41,7 @@ export default function DashboardPage() {
     console.log("Dashboard fetchData started..."); // Log start
     try {
       setLoading(true); setError(null);
-      // Clear state at the beginning of fetch
+      // Clear specific data on each fetch
       setMyEvents([]);
       setGlobalEvents([]);
       setSubscriptions({});
@@ -49,16 +49,10 @@ export default function DashboardPage() {
       console.log("Dashboard: Fetching /api/auth/me...");
       const userRes = await fetch("/api/auth/me"); // Use relative path
 
-      // --- ADDED LOG ---
       console.log("Dashboard: /api/auth/me response status:", userRes.status);
-      // --- END ADD ---
 
       if (!userRes.ok) {
          console.error("Dashboard: Auth fetch failed! Status:", userRes.status);
-         // TEMPORARILY COMMENT OUT REDIRECT TO SEE ERROR
-         // router.push('/login');
-         // return;
-         // INSTEAD, THROW ERROR TO DISPLAY IT
          setUser(null); // Clear user state
          throw new Error(`Authentication check failed: Status ${userRes.status}`);
       }
@@ -130,12 +124,14 @@ export default function DashboardPage() {
 
     } catch (err) {
       console.error("Fetch Data Error:", err);
-       // Avoid setting state if component might unmount due to redirect
        if (err.message !== "User not authenticated") {
          setError(err.message);
        }
-       // Handle auth error potentially by redirecting (re-enable if needed)
-       // if (err.message === "User not authenticated") { router.push('/login'); }
+       // Handle auth error potentially by redirecting
+       if (err.message.startsWith("Authentication check failed")) {
+           // Wait a tick before redirecting to allow state update if needed
+           setTimeout(() => router.push('/login'), 0);
+       }
     } finally {
       console.log("Setting loading to false.");
       setLoading(false);
@@ -172,11 +168,16 @@ export default function DashboardPage() {
 
   // --- RENDER LOGIC ---
   if (loading) {
+      // Show header even while loading
       return <main><Header /><hr style={{ margin: "2rem 0" }} /><p>Loading dashboard data...</p></main>;
   }
-  // If loading finished but user is null (auth failed), show error or redirect state
-  if (!user && !loading) {
-      return <main><Header /><hr style={{ margin: "2rem 0" }} /><p style={{color: "red"}}>Error: {error || "Authentication failed. Please login again."}</p></main>;
+  // If loading finished but error occurred (including auth error)
+  if (error) {
+       return <main><Header /><hr style={{ margin: "2rem 0" }} /><p style={{color: "red"}}>Error: {error}</p></main>;
+  }
+  // If loading finished, no error, but user is somehow null (shouldn't happen if auth check throws)
+  if (!user) {
+       return <main><Header /><hr style={{ margin: "2rem 0" }} /><p>Verifying session...</p></main>;
   }
 
   // User exists, render the dashboard
@@ -203,56 +204,52 @@ export default function DashboardPage() {
 
       {/* My Calendar Section - ADJUST MESSAGE FOR system_admin */}
       <h2>My Calendar</h2>
-      {error && <p style={{ color: "red" }}>Error loading calendar: {error}</p>}
-      {!error && (
-         <div>
-           {Array.isArray(myEvents) && myEvents.length > 0 ? (
-             <ul style={{ listStyle: 'none', padding: 0 }}>
-               {myEvents.map((event) => (
-                 <li key={`${event?.source}-${event?.id ?? Math.random()}`} style={{ border: '1px solid #eee', padding: '1rem', marginBottom: '1rem', borderRadius: '4px', background: event?.source === 'org' ? '#e0f7fa' : '#fff' }}>
-                   {event?.start_date ? new Date(event.start_date).toLocaleDateString() : 'Date missing'} - <strong>{event?.title ?? 'Title Missing'}</strong> ({event?.source ?? 'Source Missing'})
-                 </li>
-               ))}
-             </ul>
-           ) : (
-              user.role === 'system_admin' ? <p>System Admins do not have an organization calendar.</p> :
-              <p>No events found for the selected criteria.</p>
-           )}
-         </div>
-       )}
+      {/* No need for separate error/loading here if handled above */}
+      <div>
+        {Array.isArray(myEvents) && myEvents.length > 0 ? (
+          <ul style={{ listStyle: 'none', padding: 0 }}>
+            {myEvents.map((event) => (
+              <li key={`${event?.source}-${event?.id ?? Math.random()}`} style={{ border: '1px solid #eee', padding: '1rem', marginBottom: '1rem', borderRadius: '4px', background: event?.source === 'org' ? '#e0f7fa' : '#fff' }}>
+                {event?.start_date ? new Date(event.start_date).toLocaleDateString() : 'Date missing'} - <strong>{event?.title ?? 'Title Missing'}</strong> ({event?.source ?? 'Source Missing'})
+              </li>
+            ))}
+          </ul>
+        ) : (
+           user.role === 'system_admin' ? <p>System Admins do not have an organization calendar.</p> :
+           <p>No events found for the selected criteria.</p>
+        )}
+      </div>
 
       {/* Available Global Events Section - RENDER ONLY FOR org_admin */}
       {user?.role === 'org_admin' && (
         <>
           <hr style={{ margin: "2rem 0" }} />
           <h2>Available Global Events</h2>
-          {!error && (
-            <div>
-              {Array.isArray(globalEvents) && globalEvents.length > 0 ? (
-                <ul style={{ listStyle: 'none', padding: 0 }}>
-                  {globalEvents.map((event) => {
-                    if (!event || event.id == null) return null;
-                    const eventIdStr = String(event.id);
-                    const subscription = subscriptions[eventIdStr];
-                    const isSubscribed = !!subscription;
-                    const isHidden = subscription?.is_hidden ?? false;
-                    return (
-                      <li key={`global-${event.id}`} style={{ border: '1px solid #ccc', padding: '1rem', marginBottom: '1rem', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isHidden ? '#f0f0f0' : '#fff' }}>
-                        <div>
-                          {event?.event_date ? new Date(event.event_date).toLocaleDateString() : 'Date missing'} - <strong>{event?.name ?? 'Name Missing'}</strong> ({event?.catalog ?? 'Catalog Missing'})
-                          {event?.country ? <span> - {event.country}</span> : null}
-                          {isHidden ? <span style={{ color: 'gray', fontStyle: 'italic', marginLeft: '0.5rem' }}>(Hidden)</span> : null}
-                        </div>
-                        <div>
-                          {isSubscribed ? ( <button onClick={() => handleToggleVisibility(event.id, !isHidden)}> {isHidden ? 'Show' : 'Hide'} </button> ) : ( <button onClick={() => handleSubscribe(event.id)}> Import </button> )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (<p>No global events available.</p>) }
-            </div>
-          )}
+          <div>
+            {Array.isArray(globalEvents) && globalEvents.length > 0 ? (
+              <ul style={{ listStyle: 'none', padding: 0 }}>
+                {globalEvents.map((event) => {
+                  if (!event || event.id == null) return null;
+                  const eventIdStr = String(event.id);
+                  const subscription = subscriptions[eventIdStr];
+                  const isSubscribed = !!subscription;
+                  const isHidden = subscription?.is_hidden ?? false;
+                  return (
+                    <li key={`global-${event.id}`} style={{ border: '1px solid #ccc', padding: '1rem', marginBottom: '1rem', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isHidden ? '#f0f0f0' : '#fff' }}>
+                      <div>
+                        {event?.event_date ? new Date(event.event_date).toLocaleDateString() : 'Date missing'} - <strong>{event?.name ?? 'Name Missing'}</strong> ({event?.catalog ?? 'Catalog Missing'})
+                        {event?.country ? <span> - {event.country}</span> : null}
+                        {isHidden ? <span style={{ color: 'gray', fontStyle: 'italic', marginLeft: '0.5rem' }}>(Hidden)</span> : null}
+                      </div>
+                      <div>
+                        {isSubscribed ? ( <button onClick={() => handleToggleVisibility(event.id, !isHidden)}> {isHidden ? 'Show' : 'Hide'} </button> ) : ( <button onClick={() => handleSubscribe(event.id)}> Import </button> )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (<p>No global events available.</p>) }
+          </div>
         </>
       )}
 
@@ -261,22 +258,20 @@ export default function DashboardPage() {
          <>
            <hr style={{ margin: "2rem 0" }} />
            <h2>Global Event Catalog (Read Only)</h2>
-           {!error && (
-             <div>
-               {Array.isArray(globalEvents) && globalEvents.length > 0 ? (
-                 <ul style={{ listStyle: 'none', padding: 0 }}>
-                   {globalEvents.map((event) => (
-                      <li key={`global-readonly-${event.id}`} style={{ border: '1px solid #ccc', padding: '1rem', marginBottom: '1rem', borderRadius: '4px'}}>
-                         <div>
-                            {event?.event_date ? new Date(event.event_date).toLocaleDateString() : 'Date missing'} - <strong>{event?.name ?? 'Name Missing'}</strong> ({event?.catalog ?? 'Catalog Missing'})
-                            {event?.country ? <span> - {event.country}</span> : null}
-                         </div>
-                      </li>
-                   ))}
-                 </ul>
-               ) : (<p>No global events available.</p>) }
-             </div>
-           )}
+           <div>
+             {Array.isArray(globalEvents) && globalEvents.length > 0 ? (
+               <ul style={{ listStyle: 'none', padding: 0 }}>
+                 {globalEvents.map((event) => (
+                    <li key={`global-readonly-${event.id}`} style={{ border: '1px solid #ccc', padding: '1rem', marginBottom: '1rem', borderRadius: '4px'}}>
+                       <div>
+                          {event?.event_date ? new Date(event.event_date).toLocaleDateString() : 'Date missing'} - <strong>{event?.name ?? 'Name Missing'}</strong> ({event?.catalog ?? 'Catalog Missing'})
+                          {event?.country ? <span> - {event.country}</span> : null}
+                       </div>
+                    </li>
+                 ))}
+               </ul>
+             ) : (<p>No global events available.</p>) }
+           </div>
          </>
        )}
 
