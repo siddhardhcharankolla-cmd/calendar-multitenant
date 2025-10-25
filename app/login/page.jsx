@@ -3,17 +3,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("admin@acme.com"); // Prefill for convenience
-  const [password, setPassword] = useState("password123"); // Prefill for convenience
+  const [email, setEmail] = useState("admin@acme.com"); // Prefill
+  const [password, setPassword] = useState("password123"); // Prefill
   const [error, setError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false); // Prevent double-clicks
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    setIsSubmitting(true); // Disable button
-
+    setIsSubmitting(true);
     console.log("Login: Sending fetch request...");
 
     try {
@@ -24,35 +23,44 @@ export default function LoginPage() {
         });
 
         console.log("Login: Fetch response status:", response.status);
+        console.log("Login: Fetch response redirected:", response.redirected); // Log if fetch followed a redirect
+        console.log("Login: Fetch final URL:", response.url); // Log the final URL after potential redirects
 
-        if (response.ok) {
-          console.log("Login: Fetch successful (status 200/302).");
-          // --- FINAL FIX: Delay navigation slightly ---
+        // --- FINAL FIX: Check for successful redirect explicitly ---
+        // A successful login results in a redirect (status 200-299 range OR redirected=true)
+        // If the server sent 302, response.ok might be true, and response.redirected will be true.
+        // If the server sent 200 (less likely now), response.ok is true.
+        if (response.ok || response.redirected) {
+          console.log("Login: Fetch successful or redirected. Navigating client-side...");
           // Clear state immediately
           setEmail("");
           setPassword("");
-          // Wait a very short moment before trying client-side navigation
-          // The server's 302 should ideally handle it, but this is a fallback.
-          setTimeout(() => {
-              console.log("Login: Attempting client-side redirect after delay...");
-              // Use replace to avoid adding login to history
-              router.replace("/dashboard");
-              // As a final fallback if router fails
-              // window.location.replace("/dashboard");
-          }, 100); // 100 milliseconds delay
-          // --- END FINAL FIX ---
+          // Use router.push which is gentler than replace for standard navigation
+          router.push("/dashboard");
+          // No need for setTimeout or window.location if router.push works
         } else {
-          const data = await response.json();
-          console.log("Login: Fetch failed. Error:", data.error);
-          setError(data.error || "Login failed. Please try again.");
+          // Handle specific error statuses
+          let errorMsg = "Login failed. Please try again.";
+          try {
+              const data = await response.json();
+              errorMsg = data.error || errorMsg;
+          } catch (jsonError) {
+              console.error("Login: Could not parse error JSON:", jsonError);
+              errorMsg = `Login failed with status: ${response.status}`;
+          }
+          console.log("Login: Fetch failed. Error:", errorMsg);
+          setError(errorMsg);
           setIsSubmitting(false); // Re-enable button on error
         }
+    // --- END FINAL FIX ---
+
     } catch (err) {
-        console.error("Login: Fetch encountered an error:", err);
-        setError("An unexpected error occurred. Please try again.");
+        // Log the actual network or processing error
+        console.error("Login: Fetch encountered an unexpected client-side error:", err);
+        setError("An unexpected network error occurred. Please try again.");
         setIsSubmitting(false); // Re-enable button on error
     }
-    // Note: setIsSubmitting(false) is not called on success because navigation occurs
+    // Note: Do not set isSubmitting false on success path, navigation occurs
   };
 
   return (
@@ -60,28 +68,12 @@ export default function LoginPage() {
       <h1>Login</h1>
       <form onSubmit={handleSubmit}>
         <div>
-          <label htmlFor="email">Email</label>
-          <br />
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            disabled={isSubmitting} // Disable while submitting
-          />
+          <label htmlFor="email">Email</label><br />
+          <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={isSubmitting}/>
         </div>
         <div style={{ marginTop: "1rem" }}>
-          <label htmlFor="password">Password</label>
-          <br />
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            disabled={isSubmitting} // Disable while submitting
-          />
+          <label htmlFor="password">Password</label><br />
+          <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required disabled={isSubmitting}/>
         </div>
         {error && <p style={{ color: "red" }}>{error}</p>}
         <button type="submit" style={{ marginTop: "1rem" }} disabled={isSubmitting}>
