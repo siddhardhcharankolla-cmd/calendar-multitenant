@@ -3,12 +3,10 @@ import { useEffect, useState } from "react";
 import Header from "../components/Header";
 import { useRouter } from "next/navigation";
 
-// The rest of the page remains the same:
+// Helper function (keep as is)
 function decodeToken(token) { /* ... */ }
-// ... (all state definitions and handler functions) ...
 
 export default function DashboardPage() {
-  // All state definitions here
   const [myEvents, setMyEvents] = useState([]);
   const [globalEvents, setGlobalEvents] = useState([]);
   const [subscriptions, setSubscriptions] = useState({});
@@ -16,30 +14,85 @@ export default function DashboardPage() {
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
   const router = useRouter();
-  // ... (all filter states) ...
 
-  // The key change: Check if the user is authenticated in the client side
-  useEffect(() => {
-    // This is a minimal check to force redirection if no cookie is found
-    const token = document.cookie.split('; ').find(row => row.startsWith('session_token='))?.split('=')[1];
-    if (!token && !user) {
-        router.replace('/login');
-    } else if (token && !user) {
-        // Fetch data if token is present but state is missing
-        fetchData();
+  // Filter States (keep as is)
+  const [startDate, setStartDate] = useState(''); /* ... */
+  // ... (endDate, sourceFilter, countryFilter, industryFilter)
+
+  // fetchData function using relative paths
+  const fetchData = async (currentFilters = { startDate, endDate, sourceFilter, countryFilter, industryFilter }) => {
+    console.log("fetchData started...");
+    try {
+      setLoading(true); setError(null);
+      setMyEvents([]); setGlobalEvents([]); setSubscriptions({}); // Clear on fetch
+
+      console.log("Fetching /api/auth/me...");
+      const userRes = await fetch("/api/auth/me"); // Relative path
+      console.log("/api/auth/me status:", userRes.status);
+      if (!userRes.ok) { setUser(null); throw new Error("User not authenticated"); }
+      const userData = await userRes.json();
+      console.log("User data received:", userData);
+      setUser(userData);
+      if (!userData) { throw new Error("User data is missing"); }
+
+      const isSystemAdmin = userData.role === 'system_admin';
+      const promises = [];
+      const params = new URLSearchParams();
+
+      // ALWAYS Fetch Global Events
+      console.log("Adding Global Events fetch...");
+      promises.push(fetch("/api/admin/global-events")); // Relative path
+
+      // ONLY Fetch Org Data if NOT system_admin
+      if (!isSystemAdmin) {
+        // Build calendar params
+        if (currentFilters.startDate) params.append('startDate', currentFilters.startDate);
+        // ... (add other params)
+        const calendarPath = `/api/calendar?${params.toString()}`; // Relative path
+        console.log("Adding Calendar fetch:", calendarPath);
+        promises.push(fetch(calendarPath));
+        console.log("Adding Subscriptions fetch...");
+        promises.push(fetch("/api/org/subscriptions")); // Relative path
+      } else {
+        promises.push(Promise.resolve({ ok: true, json: async () => [] })); // Calendar placeholder
+        promises.push(Promise.resolve({ ok: true, json: async () => [] })); // Subscriptions placeholder
+      }
+
+      console.log("Fetching data via Promise.all...");
+      const [globalEventsRes, myEventsRes, subscriptionsRes] = await Promise.all(promises);
+      // ... (check responses, parse JSON, set state - same as before) ...
+       if (!globalEventsRes.ok) { throw new Error("Failed to fetch global events"); }
+       if (!isSystemAdmin && (!myEventsRes.ok || !subscriptionsRes.ok)) { throw new Error("Failed to fetch necessary org data"); }
+       const globalEventsData = await globalEventsRes.json();
+       const myEventsData = await myEventsRes.json();
+       const subscriptionsData = await subscriptionsRes.json();
+       const subsMap = subscriptionsData.reduce((acc, sub) => { if (sub && sub.global_event_id != null) acc[String(sub.global_event_id)] = { is_hidden: sub.is_hidden }; return acc; }, {});
+       setMyEvents(Array.isArray(myEventsData) ? myEventsData : []);
+       setGlobalEvents(Array.isArray(globalEventsData) ? globalEventsData : []);
+       setSubscriptions(subsMap);
+
+    } catch (err) {
+      console.error("Fetch Data Error:", err);
+       if (err.message !== "User not authenticated") setError(err.message);
+       if (err.message === "User not authenticated") { router.push('/login'); }
+    } finally {
+      console.log("Setting loading to false."); setLoading(false);
     }
-  }, [user, router]); // Dependency array ensures check runs when user state changes
+  };
 
-  // ... (rest of the component functions: fetchData, handleApplyFilters, etc.) ...
-  
-  // OMITTING full code for brevity, but this requires placing the full component 
-  // into the file you have.
+  useEffect(() => { fetchData(); }, []);
 
-  if (!user && !loading) return <main><p>Redirecting...</p></main>;
+  // Handlers (using relative paths)
+  const handleApplyFilters = () => { fetchData({ startDate, endDate, sourceFilter, countryFilter, industryFilter }); };
+  const handleSubscribe = async (globalEventId) => { setError(null); try { const response = await fetch("/api/org/subscriptions", { method: "POST", /*...*/ }); if (!response.ok) {/*...*/} fetchData(); } catch (err) { /*...*/ } };
+  const handleToggleVisibility = async (globalEventId, newHiddenState) => { setError(null); try { const response = await fetch("/api/org/subscriptions", { method: "PUT", /*...*/ }); if (!response.ok) {/*...*/} fetchData(); } catch (err) { /*...*/ } };
 
-  return (
-    <main>
-      {/* ... The rest of the dashboard JSX ... */}
-    </main>
-  );
+  // --- RENDER LOGIC (Keep as is) ---
+  if (loading) return <main><p>Loading...</p></main>;
+  if (!user && !loading) return <main><p>Verifying session...</p></main>;
+  return ( <main> {/* ... The rest of the dashboard JSX ... */} </main> );
 }
+
+// Ensure handlers are fully pasted below
+async function handleSubscribe(globalEventId) { /* ... full code using relative path ... */ }
+async function handleToggleVisibility(globalEventId, newHiddenState) { /* ... full code using relative path ... */ }
