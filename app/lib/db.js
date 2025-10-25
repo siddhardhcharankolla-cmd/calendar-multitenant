@@ -1,14 +1,13 @@
 import pg from "pg";
 
-// Check if the environment variable is set
+// Check if the environment variable is set (important for Render)
 if (!process.env.DATABASE_URL) {
   console.error("FATAL: DATABASE_URL environment variable is not set.");
-  // In production, the application might crash here or handle this error.
-  // We log it and let the Pool creation attempt proceed, which will likely fail.
+  // You might want the app to crash here in production if DB is essential
 }
 
-// Create the connection pool instance
 const pool = new pg.Pool({
+  // Use the environment variable provided by Render
   connectionString: process.env.DATABASE_URL,
   // Add SSL configuration required for Render PostgreSQL
   ssl: {
@@ -16,38 +15,31 @@ const pool = new pg.Pool({
   }
 });
 
-// Optional: Test connection on application startup (logs to Render console)
+// Optional: Test connection on application startup
 pool.connect((err, client, release) => {
   if (err) {
-    // Log detailed error if initial connection fails
-    console.error('Initial DB Connection Test FAILED:', err.stack);
-    // You might want to exit the process here in a real app if DB is critical
-    // process.exit(1);
+    console.error('Initial DB Connection Test FAILED on startup:', err.stack);
   } else {
     console.log('Database connection test successful on startup!');
-    // Optional: Run a simple query to confirm
-    client.query('SELECT NOW()', (err, result) => {
-      release(); // Release the client back to the pool
+    client.query('SELECT NOW()', (err, result) => { // Run a simple query
+      release(); // Release the client
       if (err) {
         console.error('Error executing initial test query', err.stack);
-      } else {
-        // console.log('Current DB time:', result.rows[0].now); // Can log time if needed
       }
     });
   }
 });
 
-// Main query function used by API routes
+// Main query function
 export async function query(text, params) {
   const client = await pool.connect();
   try {
     const res = await client.query(text, params);
     return res;
   } finally {
-    // Ensure the client is always released back to the pool
     client.release();
   }
 }
 
-// Export the pool instance for direct connection tests (e.g., in login API)
+// Export the pool instance if needed elsewhere (like connection test in login)
 export { pool };
